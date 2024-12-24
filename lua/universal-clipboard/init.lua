@@ -62,7 +62,7 @@ local function warn(msg)
 end
 
 -- Pick copy/paste commands from the list in opts.tools
-local function pick_copy_paste_tool(opts)
+local function pick_copy_paste_tool()
 	info("[universal-clipboard.nvim] looking for copy/paste tool ...")
 
 	local function check_detect(tool)
@@ -80,7 +80,7 @@ local function pick_copy_paste_tool(opts)
 		return false
 	end
 
-	for _, tool in ipairs(opts.tools) do
+	for _, tool in ipairs(M.opts.tools) do
 		if check_detect(tool) then
 			info("[universal-clipboard.nvim] found " .. tool.name)
 			return tool
@@ -92,12 +92,12 @@ local function pick_copy_paste_tool(opts)
 end
 
 -- Configure Neovim's clipboard usage
-local function configure_clipboard(opts)
+local function configure_clipboard()
 	-- Unify normal yanks/pastes to systepm clipboard
 	vim.opt.clipboard = "unnamedplus"
 
 	-- Search for custom clipboard provider
-	local tool = pick_copy_paste_tool(opts)
+	local tool = pick_copy_paste_tool()
 	if tool then
 		vim.g.clipboard = {
 			name = "UniversalClipboard(" .. tool.name .. ")",
@@ -125,7 +125,7 @@ function M.setup(opts)
 	M.opts = vim.tbl_deep_extend("force", M.opts, opts or {})
 
 	-- Set the clipboard up
-	local tool_name = configure_clipboard(M.opts)
+	local tool_name = configure_clipboard()
 	info(("[universal-clipboard.nvim] Clipboard tool: %s"):format(tool_name))
 
 	-- Command for viewing results
@@ -139,10 +139,12 @@ function M.setup(opts)
 	-- Command for re-running checks
 	vim.api.nvim_create_user_command("UniversalClipboardReinit", function()
 		print("=== UniversalClipboardReinit ===")
-		local verbose_opts = vim.tbl_deep_extend("force", M.opts, { verbose = true })
-		local new_tool_name = configure_clipboard(verbose_opts)
+		local original_verbose = M.opts.verbose
+		M.opts.verbose = true
+		local new_tool_name = configure_clipboard()
 		print("Reinitialized external clipboard tool: " .. new_tool_name)
 		vim.cmd("UniversalClipboardCheck")
+		M.opts.verbose = original_verbose
 	end, {})
 end
 
