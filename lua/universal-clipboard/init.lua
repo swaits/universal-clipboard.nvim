@@ -1,18 +1,17 @@
 -- lua/universal-clipboard/init.lua
 local M = {}
 
--- 1) Default options
+-- Our default options
 local default_opts = {
 	verbose = false,
 }
 
--- 2) Check if Neovim has '+clipboard'
-local function has_builtin_clipboard()
-	return vim.fn.has("clipboard") == 1
-end
+-- Pick copy/paste commands for Wayland or X11 if '+clipboard' is missing
+local function pick_copy_paste_commands(opts)
+	if opts.verbose then
+		vim.notify("[universal-clipboard.nvim] looking for wl-copy/xclip/xsel ...")
+	end
 
--- 3) Pick copy/paste commands for Wayland or X11 if '+clipboard' is missing
-local function pick_copy_paste_commands()
 	-- Check Wayland + wl-copy/wl-paste
 	local wayland_display = os.getenv("WAYLAND_DISPLAY")
 	local wayland_runtime = os.getenv("XDG_RUNTIME_DIR")
@@ -23,14 +22,20 @@ local function pick_copy_paste_commands()
 	local have_wayland = wayland_display and wayland_display ~= "" and (vim.fn.isdirectory(wayland_socket_path) == 1)
 
 	if has_wlcopy and has_wlpaste and have_wayland then
+		if opts.verbose then
+			vim.notify("[universal-clipboard.nvim] found wl-copy/wl-paste + Wayland", vim.log.levels.INFO)
+		end
 		return {
 			copy = "wl-copy",
 			paste = "wl-paste --no-newline",
 		}
 	end
 
-	-- Otherwise, try xclip
+	-- Next, try xclip
 	if vim.fn.executable("xclip") == 1 then
+		if opts.verbose then
+			vim.notify("[universal-clipboard.nvim] found xclip", vim.log.levels.INFO)
+		end
 		return {
 			copy = "xclip -selection clipboard",
 			paste = "xclip -selection clipboard -o",
@@ -39,6 +44,9 @@ local function pick_copy_paste_commands()
 
 	-- Otherwise, try xsel
 	if vim.fn.executable("xsel") == 1 then
+		if opts.verbose then
+			vim.notify("[universal-clipboard.nvim] found xsel", vim.log.levels.INFO)
+		end
 		return {
 			copy = "xsel --clipboard --input",
 			paste = "xsel --clipboard --output",
@@ -46,73 +54,72 @@ local function pick_copy_paste_commands()
 	end
 
 	-- No suitable tool found
+	if opts.verbose then
+		vim.notify("[universal-clipboard.nvim] none found.")
+	end
 	return nil
 end
 
 -- 4) Actually configure Neovim's clipboard usage
-local function configure_clipboard()
-	if has_builtin_clipboard() then
-		-- Neovim has native +clipboard
-		vim.opt.clipboard = "unnamedplus"
-		return "builtin"
+local function configure_clipboard(opts)
+	-- Unify normal yanks/pastes to systepm clipboard
+	vim.opt.clipboard = "unnamedplus"
+
+	-- Search for custom clipboard provider
+	local commands = pick_copy_paste_commands(opts)
+	if commands then
+		vim.g.clipboard = {
+			name = "UniversalClipboard",
+			copy = {
+				["+"] = commands.copy,
+				["*"] = commands.copy,
+			},
+			paste = {
+				["+"] = commands.paste,
+				["*"] = commands.paste,
+			},
+			cache_enabled = 0,
+		}
+		return "wl-copy/xclip/xsel"
 	else
-		-- Fall back to custom clipboard provider
-		local commands = pick_copy_paste_commands()
-		if commands then
-			vim.g.clipboard = {
-				name = "UniversalClipboard",
-				copy = {
-					["+"] = commands.copy,
-					["*"] = commands.copy,
-				},
-				paste = {
-					["+"] = commands.paste,
-					["*"] = commands.paste,
-				},
-				cache_enabled = 0,
-			}
-			-- Also unify normal yanks/pastes to system clipboard
-			vim.opt.clipboard = "unnamedplus"
-			return "fallback"
-		else
-			-- No tool found
-			vim.notify(
-				"[universal-clipboard.nvim] No suitable clipboard tool found (wl-copy, xclip, xsel).",
-				vim.log.levels.WARN
-			)
-			return "none"
-		end
+		-- No tool found
+		vim.notify(
+			"[universal-clipboard.nvim] No suitable clipboard tool found (wl-copy, xclip, xsel).",
+			vim.log.levels.WARN
+		)
+		return "system"
 	end
 end
 
--- 5) Setup function (entry point)
+-- Setup function (entry point)
 function M.setup(user_opts)
 	-- Merge defaults with user_opts
 	local opts = vim.tbl_deep_extend("force", default_opts, user_opts or {})
 
-	local mode = configure_clipboard()
+	-- Set the clipboard up
+	local mode = configure_clipboard(opts)
 	if opts.verbose then
 		vim.notify(("[universal-clipboard.nvim] Clipboard mode: %s"):format(mode), vim.log.levels.INFO)
 	end
 
 	-- Create user commands for debugging / re-init
 	vim.api.nvim_create_user_command("UniversalClipboardCheck", function()
-		if has_builtin_clipboard() then
-			print("Neovim has +clipboard. Current setting:")
-			print(vim.inspect(vim.opt.clipboard:get()))
+		print("=== UniversalClipboardCheck ===")
+
+		local opt_clipboard = vim.opt.clipboard:get()
+		print("vim.opt.clipboard = ", vim.inspect(opt_clipboard))
+
+		if vim.g.clipboard then
+			print("vim.g.clipboard = ", vim.inspect(vim.g.clipboard))
 		else
-			print("Neovim lacks +clipboard. Using fallback if available.")
-			if vim.g.clipboard then
-				print("Fallback config: " .. vim.inspect(vim.g.clipboard))
-			else
-				print("No fallback is set (no suitable tool found?).")
-			end
+			print("vim.g.clipboard is not set.")
 		end
 	end, {})
 
 	vim.api.nvim_create_user_command("UniversalClipboardReinit", function()
-		local new_mode = configure_clipboard()
+		local new_mode = configure_clipboard({ verbose = true })
 		print("Reinitialized clipboard mode: " .. new_mode)
+		vim.cmd("UniversalClipboardCheck")
 	end, {})
 end
 
