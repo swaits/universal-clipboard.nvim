@@ -1,0 +1,27 @@
+image: alpine/edge
+packages:
+  - git
+
+secrets:
+  - 88cce185-d2ec-4573-9546-e33f36f79bbf
+
+environment:
+  # repo and user names on both sr.ht and github
+  REPO: universal-clipboard.nvim
+  USER: swaits
+
+tasks:
+  - fetch-all-branches: |
+      cd "$HOME/$REPO"
+      git fetch origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*' --prune
+
+  - get-github-public-key: |
+      ssh-keyscan -t rsa github.com >> "$HOME/.ssh/known_hosts"
+
+  - add-github-remote: |
+      cd "$HOME/$REPO"
+      git remote add github "git@github.com:$USER/$REPO.git"
+
+  - mirror-to-github: |
+      cd "$HOME/$REPO"
+      git push --mirror github
