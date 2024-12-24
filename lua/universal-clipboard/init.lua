@@ -83,10 +83,12 @@ local function configure_clipboard(opts)
 		return "wl-copy/xclip/xsel"
 	else
 		-- No tool found
-		vim.notify(
-			"[universal-clipboard.nvim] No suitable clipboard tool found (wl-copy, xclip, xsel).",
-			vim.log.levels.WARN
-		)
+		if opts.verbose then
+			vim.notify(
+				"[universal-clipboard.nvim] No external clipboard tool found (wl-copy, xclip, xsel).",
+				vim.log.levels.WARN
+			)
+		end
 		return "system"
 	end
 end
