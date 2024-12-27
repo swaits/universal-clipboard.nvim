@@ -17,7 +17,7 @@ local M = {
 					return (vim.fn.executable("wl-copy") == 1)
 						and (vim.fn.executable("wl-paste") == 1)
 						and wayland_display ~= ""
-						and (vim.fn.isdirectory(socket_path) == 1)
+						and (vim.fn.filereadable(socket_path) == 1)
 				end,
 				commands = {
 					copy = "wl-copy",
