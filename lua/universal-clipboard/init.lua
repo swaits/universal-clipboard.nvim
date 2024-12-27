@@ -67,8 +67,10 @@ local function pick_copy_paste_tool()
 
 	local function check_detect(tool)
 		if type(tool.detect) == "function" then
+			info("[universal-clipboard.nvim]: running detect function for " .. tool.name)
 			return tool.detect()
 		elseif type(tool.detect) == "string" then
+			info("[universal-clipboard.nvim]: checking for executable " .. tool.detect)
 			return vim.fn.executable(tool.detect) == 1
 		else
 			vim.notify(
@@ -81,6 +83,7 @@ local function pick_copy_paste_tool()
 	end
 
 	for _, tool in ipairs(M.opts.tools) do
+		info("[universal-clipboard.nvim] checking for " .. tool.name)
 		if check_detect(tool) then
 			info("[universal-clipboard.nvim] found " .. tool.name)
 			return tool
